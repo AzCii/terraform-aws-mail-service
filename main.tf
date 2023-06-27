@@ -1,9 +1,6 @@
 # Setup bucket for storing incoming e-mails
 resource "aws_s3_bucket" "mail" {
   bucket = "${var.domain}-mail-service"
-  tags = {
-    terraform = "anders_mp.tfstate"
-  }
 }
 
 # Setup bucket policy to allow SES to write to bucket
