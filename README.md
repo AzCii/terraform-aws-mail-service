@@ -53,4 +53,4 @@ The following attributes are exported:
 
 ## Known Issues
 
-- None
+- Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
