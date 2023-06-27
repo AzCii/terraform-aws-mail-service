@@ -44,7 +44,8 @@ The following arguments are supported:
 
 The following attributes are exported:
 
-- None
+- mail_bucket_arn - ARN of the S3 bucket.
+- mail_lambda_arn - The Amazon Resource Name (ARN) identifying your Lambda Function.
 
 ## Known Issues
 
