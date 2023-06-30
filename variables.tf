@@ -24,6 +24,12 @@ variable "mx_records" {
   default     = []
 }
 
+variable "mail_from_mx_records" {
+  description = "List of MX records to set for the custom mail from domain"
+  type        = list(any)
+  default     = []
+}
+
 variable "spf_records" {
   description = "List of Sender Policy Framework records to set for the domain"
   type        = list(any)

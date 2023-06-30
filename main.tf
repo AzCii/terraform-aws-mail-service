@@ -133,12 +133,12 @@ resource "aws_route53_record" "mx_record" {
 }
 
 resource "aws_route53_record" "domain_mail_from_mx_record" {
-  count   = length(var.mx_records) > 0 ? 1 : 0
+  count   = length(var.mail_from_mx_records) > 0 ? 1 : 0
   zone_id = var.dns_zone_id
   name    = aws_ses_domain_mail_from.forwarder.mail_from_domain
   type    = "MX"
   ttl     = "600"
-  records = var.mx_records
+  records = var.mail_from_mx_records
 }
 
 resource "aws_route53_record" "spf_record" {
