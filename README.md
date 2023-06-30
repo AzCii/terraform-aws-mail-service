@@ -12,18 +12,22 @@ The setup is based on the blog post [Forward Incoming Email to an External Desti
 ## Example Usage
 
 ```hcl
+resource "aws_route53_zone" "example" {
+  name = "example.com"
+}
+
 module "mail_service" {
   source = "github.com/AzCii/terraform-aws-mail-service"
   
-  dns_zone_id          = aws_route53_zone.website.zone_id
-  domain               = example.com
-  aws_region           = var.aws_region
-  mail_recipient       = "example@gmail.com"
-  mail_sender_prefix   = "forward"
-  mx_records           = ["10 inbound-smtp.${var.aws_region}.amazonaws.com"]
-  mail_from_mx_records = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]    
-  spf_records          = ["v=spf1 include:amazonses.com include:_spf.google.com ~all"]
-  dmarc_records        = ["v=DMARC1; p=none;"]
+  dns_zone_id        = aws_route53_zone.example.zone_id
+  domain             = example.com
+  aws_region         = var.aws_region
+  mail_recipient     = "example@gmail.com"
+  mail_sender_prefix = "mail"
+  mx_records         = ["10 inbound-smtp.${var.aws_region}.amazonaws.com"]
+  mail_from_mx_records = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]  
+  spf_records        = ["v=spf1 include:amazonses.com include:_spf.google.com ~all"]
+  dmarc_records      = ["v=DMARC1; p=none;"]
 }
 ```
 
@@ -51,4 +55,4 @@ The following attributes are exported:
 
 ## Known Issues
 
-- None
+- Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
