@@ -167,3 +167,17 @@ resource "aws_route53_record" "dmarc_record" {
   records = var.dmarc_records
   ttl     = "600"
 }
+
+resource "aws_ses_domain_dkim" "domain_dkim" {
+  count   = var.dkim_records ? 1 : 0
+  domain = aws_ses_domain_identity.mail.domain
+}
+
+resource "aws_route53_record" "dkim_record" {
+  count   = var.dkim_records ? 3 : 0
+  zone_id = var.dns_zone_id
+  name    = "${aws_ses_domain_dkim.domain_dkim[0].dkim_tokens[count.index]}._domainkey"
+  type    = "CNAME"
+  records = ["${aws_ses_domain_dkim.domain_dkim[0].dkim_tokens[count.index]}.dkim.amazonses.com"]
+  ttl     = "600"
+}

@@ -28,6 +28,7 @@ module "mail_service" {
   mail_from_mx_records = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]  
   spf_records          = ["v=spf1 include:amazonses.com include:_spf.google.com ~all"]
   dmarc_records        = ["v=DMARC1; p=none;"]
+  dkim_records         = true
 }
 ```
 
@@ -45,6 +46,7 @@ The following arguments are supported:
 - mail_from_mx_records - (Optional) The MX records to create.
 - spf_records - (Optional) The SPF records to create.
 - dmarc_records - (Optional) The DMARC records to create.
+- dkim_records - (Optional) If true, create DKIM records, default is set to false.
 
 ## Attributes Reference
 

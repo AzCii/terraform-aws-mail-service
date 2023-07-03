@@ -41,3 +41,9 @@ variable "dmarc_records" {
   type        = list(any)
   default     = []
 }
+
+variable "dkim_records" {
+  description = "Provides an SES DomainKeys Identified Mail resource"
+  type        = bool
+  default     = false
+}
