@@ -14,10 +14,10 @@ output "smtp_endpoint" {
 }
 
 output "smtp_username" {
-  value = aws_iam_access_key.access_key.id
+  value = aws_iam_access_key.access_key[0].id
 }
 
 output "smtp_password" {
-  value     = aws_iam_access_key.access_key.ses_smtp_password_v4
+  value     = aws_iam_access_key.access_key[0].ses_smtp_password_v4
   sensitive = true
 }
