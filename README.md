@@ -29,6 +29,7 @@ module "mail_service" {
   spf_records          = ["v=spf1 include:amazonses.com include:_spf.google.com ~all"]
   dmarc_records        = ["v=DMARC1; p=none;"]
   dkim_records         = true
+  smtp_configuration   = true
 }
 ```
 
@@ -47,6 +48,7 @@ The following arguments are supported:
 - spf_records - (Optional) The SPF records to create.
 - dmarc_records - (Optional) The DMARC records to create.
 - dkim_records - (Optional) If true, create DKIM records, default is set to false.
+- smtp_configuration - (Optional) If true, creates IAM credentials form SMTP, default is set to false.
 
 ## Attributes Reference
 
@@ -54,7 +56,11 @@ The following attributes are exported:
 
 - mail_bucket_arn - ARN of the S3 bucket.
 - mail_lambda_arn - The Amazon Resource Name (ARN) identifying your Lambda Function.
+- smtp_endpoint - The endpoint for the SMTP service.
+- smtp_username - The username for the SMTP service.
+- smtp_password - The password for the SMTP service, can be outputted in user readable format using `nonsensitive(module.mail-service.smtp_password)`.
 
 ## Known Issues
 
 - Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
+- Sometimes emails will arrive 3 times in the inbox, I have not investigated why at this point.

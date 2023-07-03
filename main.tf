@@ -169,7 +169,7 @@ resource "aws_route53_record" "dmarc_record" {
 }
 
 resource "aws_ses_domain_dkim" "domain_dkim" {
-  count   = var.dkim_records ? 1 : 0
+  count  = var.dkim_records ? 1 : 0
   domain = aws_ses_domain_identity.mail.domain
 }
 
@@ -180,4 +180,39 @@ resource "aws_route53_record" "dkim_record" {
   type    = "CNAME"
   records = ["${aws_ses_domain_dkim.domain_dkim[0].dkim_tokens[count.index]}.dkim.amazonses.com"]
   ttl     = "600"
+}
+
+# SMTP Configuration
+# Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
+resource "aws_iam_user" "user" {
+  count = var.smtp_configuration ? 1 : 0
+  name  = "smtpIAMUser"
+}
+
+# Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
+resource "aws_iam_access_key" "access_key" {
+  count = var.smtp_configuration ? 1 : 0
+  user  = aws_iam_user.user[0].name
+}
+
+# Attaches a Managed IAM Policy to SES Email Identity resource
+data "aws_iam_policy_document" "policy_document" {
+  statement {
+    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
+    resources = [aws_ses_email_identity.forwarder.arn]
+  }
+}
+
+# Provides an IAM policy attached to a user.
+resource "aws_iam_policy" "policy" {
+  count  = var.smtp_configuration ? 1 : 0
+  name   = "smtpIAMUserPolicy"
+  policy = data.aws_iam_policy_document.policy_document.json
+}
+
+# Attaches a Managed IAM Policy to an IAM user
+resource "aws_iam_user_policy_attachment" "user_policy" {
+  count      = var.smtp_configuration ? 1 : 0
+  user       = aws_iam_user.user[0].name
+  policy_arn = aws_iam_policy.policy[0].arn
 }

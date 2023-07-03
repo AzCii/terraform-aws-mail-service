@@ -47,3 +47,9 @@ variable "dkim_records" {
   type        = bool
   default     = false
 }
+
+variable "smtp_configuration" {
+  description = "Configure credentials for SMTP access"
+  type        = bool
+  default     = false
+}
