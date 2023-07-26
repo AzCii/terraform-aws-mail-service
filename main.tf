@@ -89,6 +89,12 @@ resource "aws_lambda_function" "forward_mail" {
   }
 }
 
+# Lambda will try to send the email 3 times, if an error occurs in the code after the mail is sent, you will recieve the same email 3 times.
+resource "aws_lambda_function_event_invoke_config" "limit_retry" {
+  function_name          = aws_lambda_function.forward_mail.function_name
+  maximum_retry_attempts = 2
+}
+
 resource "aws_ses_receipt_rule_set" "main" {
   rule_set_name = "${var.domain}-mail-service"
 }

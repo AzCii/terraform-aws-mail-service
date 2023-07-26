@@ -11,7 +11,7 @@ incoming_email_bucket = os.environ['MailS3Bucket']  # S3 bucket where SES stores
 incoming_email_prefix = os.environ['MailS3Prefix'] # optional, if messages aren't stored in root
 
 # Send the email
-def send_email(message):
+def send_email(message, original_from):
 
     # Create a new SES resource.
     ses = boto3.client('ses')
@@ -55,5 +55,5 @@ def lambda_handler(event, context):
 
     # Send the email and print the result.
     message = msg.as_string()
-    result = send_email(message)
+    result = send_email(message, original_from)
     print(result)
