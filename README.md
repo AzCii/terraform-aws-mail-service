@@ -48,7 +48,7 @@ The following arguments are supported:
 - spf_records - (Optional) The SPF records to create.
 - dmarc_records - (Optional) The DMARC records to create.
 - dkim_records - (Optional) If true, create DKIM records, default is set to false.
-- smtp_configuration - (Optional) If true, creates IAM credentials form SMTP, default is set to false.
+- smtp_configuration - (Optional) If true, creates IAM credentials for SMTP, default is set to false.
 
 ## Attributes Reference
 
