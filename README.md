@@ -20,7 +20,7 @@ module "mail_service" {
   source = "github.com/AzCii/terraform-aws-mail-service"
   
   dns_zone_id          = aws_route53_zone.example.zone_id
-  domain               = example.com
+  domain               = "example.com"
   aws_region           = var.aws_region
   mail_recipient       = "example@gmail.com"
   mail_sender_prefix   = "mail"
