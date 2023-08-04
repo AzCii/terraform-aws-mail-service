@@ -20,7 +20,7 @@ module "mail_service" {
   source = "github.com/AzCii/terraform-aws-mail-service"
   
   dns_zone_id          = aws_route53_zone.example.zone_id
-  domain               = example.com
+  domain               = "example.com"
   aws_region           = var.aws_region
   mail_recipient       = "example@gmail.com"
   mail_sender_prefix   = "mail"
@@ -48,7 +48,7 @@ The following arguments are supported:
 - spf_records - (Optional) The SPF records to create.
 - dmarc_records - (Optional) The DMARC records to create.
 - dkim_records - (Optional) If true, create DKIM records, default is set to false.
-- smtp_configuration - (Optional) If true, creates IAM credentials form SMTP, default is set to false.
+- smtp_configuration - (Optional) If true, creates IAM credentials for SMTP, default is set to false.
 
 ## Attributes Reference
 
