@@ -44,6 +44,9 @@ def lambda_handler(event, context):
     raw_mail = o['Body'].read()
     msg = email.message_from_bytes(raw_mail)
 
+    # Remove the DKIM-Signature header, as it is expected to cause issues with forwarding in some cases
+    del msg['DKIM-Signature']
+
     # Replace the original From address with the authenticated forwarding address
     original_from = msg['From']
     del msg['From']
@@ -55,5 +58,6 @@ def lambda_handler(event, context):
 
     # Send the email and print the result.
     message = msg.as_string()
+    print(f"Forwarding mail from {original_from}")
     result = send_email(message, original_from)
     print(result)
