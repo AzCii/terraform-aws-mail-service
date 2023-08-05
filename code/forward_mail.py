@@ -5,10 +5,28 @@ import boto3
 from botocore.exceptions import ClientError
 
 # Read the environment variables
-mail_recipient = os.environ['MailRecipient']  # An email that is verified by SES to use as From address.
+mail_recipient = os.environ['MailRecipient']  # An email that is verified by SES to forward the email to.
 mail_sender = os.environ['MailSender']  # An email that is verified by SES to use as From address.
 incoming_email_bucket = os.environ['MailS3Bucket']  # S3 bucket where SES stores incoming emails.
-incoming_email_prefix = os.environ['MailS3Prefix'] # optional, if messages aren't stored in root
+incoming_email_prefix = os.environ['MailS3Prefix'] # Folder of the incomming emails
+archive_email_prefix = os.environ['MailS3Archive'] # Successfully sent emails will be moved to this folder
+error_email_prefix = os.environ['MailS3Error'] # Failed emails will be moved to this folder
+
+
+# Archieve the message after email have been sent
+def move_email(s3, message_id, destination_folder):
+    copy_source = {
+        'Bucket': incoming_email_bucket,
+        'Key': incoming_email_prefix + "/" + message_id
+    }
+    try:
+        s3.copy_object(Bucket=incoming_email_bucket, Key=destination_folder + "/" + message_id, CopySource=copy_source)
+        s3.delete_object(Bucket=incoming_email_bucket, Key=incoming_email_prefix + "/" + message_id)
+    except ClientError as e: 
+        output = e.response['Error']['Message']
+    else:
+        output = "Message ID " +  message_id + " have been moved to " + destination_folder
+    return output
 
 # Send the email
 def send_email(message, original_from):
@@ -21,9 +39,10 @@ def send_email(message, original_from):
         o = ses.send_raw_email(Destinations=[mail_recipient], RawMessage=dict(Data=message))
     except ClientError as e: 
         output = e.response['Error']['Message']
+        return False, output 
     else:
         output = "Email from " +  original_from + " was forwarded to " + mail_recipient + " by " + mail_sender
-    return output
+        return True, output
 
 # Lambda handler
 def lambda_handler(event, context):
@@ -36,15 +55,12 @@ def lambda_handler(event, context):
     print(f"Received message ID {message_id}")
 
     # Retrieve the email from your bucket
-    if incoming_email_prefix:
-        object_path = (incoming_email_prefix + "/" + message_id)
-    else:
-        object_path = message_id
+    object_path = (incoming_email_prefix + "/" + message_id)
     o = s3.get_object(Bucket=incoming_email_bucket, Key=object_path)
     raw_mail = o['Body'].read()
     msg = email.message_from_bytes(raw_mail)
 
-    # Remove the DKIM-Signature header, as it is expected to cause issues with forwarding in some cases
+    # Remove the DKIM-Signature header, as it can cause issues with forwarding
     del msg['DKIM-Signature']
 
     # Replace the original From address with the authenticated forwarding address
@@ -56,8 +72,16 @@ def lambda_handler(event, context):
     msg['Reply-To'] = original_from
     msg['Return-Path'] = mail_sender
 
-    # Send the email and print the result.
-    message = msg.as_string()
-    print(f"Forwarding mail from {original_from}")
-    result = send_email(message, original_from)
+    # Send the email and handle the result
+    print(f"Forwarding mail with message ID {message_id} from {original_from}")
+    message = msg.as_string()   
+    success, result = send_email(message, original_from)
     print(result)
+    if success:
+        # Archieve the message
+        result = move_email(s3, message_id, archive_email_prefix)
+        print(result)
+    else:
+        # Email failed to send, move it to the error folder
+        result = move_email(s3, message_id, error_email_prefix)
+        print(result)

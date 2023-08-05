@@ -63,4 +63,3 @@ The following attributes are exported:
 ## Known Issues
 
 - Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
-- Some emails are not getting forwarded. The mails will be delivered in the S3 bucket and the Lambda function will run without errors, but the email will not be forwarded. Working theory is that this is related to DKIM signing.
