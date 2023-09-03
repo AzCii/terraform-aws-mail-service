@@ -75,7 +75,7 @@ resource "aws_lambda_function" "forward_mail" {
   role             = aws_iam_role.ses_role.arn
   handler          = "${trimsuffix(basename(data.archive_file.python_lambda_package.source_file), ".py")}.lambda_handler"
   source_code_hash = data.archive_file.python_lambda_package.output_base64sha256
-  timeout          = 30
+  timeout          = var.lambda_timeout_seconds
   runtime          = "python3.7"
 
   environment {

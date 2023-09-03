@@ -19,17 +19,18 @@ resource "aws_route53_zone" "example" {
 module "mail_service" {
   source = "github.com/AzCii/terraform-aws-mail-service"
   
-  dns_zone_id          = aws_route53_zone.example.zone_id
-  domain               = "example.com"
-  aws_region           = var.aws_region
-  mail_recipient       = "example@gmail.com"
-  mail_sender_prefix   = "mail"
-  mx_records           = ["10 inbound-smtp.${var.aws_region}.amazonaws.com"]
-  mail_from_mx_records = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]  
-  spf_records          = ["v=spf1 include:amazonses.com include:_spf.google.com ~all"]
-  dmarc_records        = ["v=DMARC1; p=none;"]
-  dkim_records         = true
-  smtp_configuration   = true
+  dns_zone_id            = aws_route53_zone.example.zone_id
+  domain                 = "example.com"
+  aws_region             = var.aws_region
+  mail_recipient         = "example@gmail.com"
+  mail_sender_prefix     = "mail"
+  mx_records             = ["10 inbound-smtp.${var.aws_region}.amazonaws.com"]
+  mail_from_mx_records   = ["10 feedback-smtp.${var.aws_region}.amazonses.com"]  
+  spf_records            = ["v=spf1 include:amazonses.com include:_spf.google.com ~all"]
+  dmarc_records          = ["v=DMARC1; p=none;"]
+  dkim_records           = true
+  smtp_configuration     = true
+  lambda_timeout_seconds = 60
 }
 ```
 
@@ -49,6 +50,7 @@ The following arguments are supported:
 - dmarc_records - (Optional) The DMARC records to create.
 - dkim_records - (Optional) If true, create DKIM records, default is set to false.
 - smtp_configuration - (Optional) If true, creates IAM credentials for SMTP, default is set to false.
+- lambda_timeout_seconds - (Optional) Amount of time your Lambda Function has to run in seconds. Defaults to `120`. See [Limits](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html).
 
 ## Attributes Reference
 
@@ -63,3 +65,5 @@ The following attributes are exported:
 ## Known Issues
 
 - Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
+- A few large emails with many pictures have been seen to get stuck in the incoming folder.
+- A few emails have ended up in the failed folder, with the error message `Email address is not verified. The following identities failed the check in region EU-WEST-1: email@example.com`.

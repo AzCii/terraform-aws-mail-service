@@ -53,3 +53,9 @@ variable "smtp_configuration" {
   type        = bool
   default     = false
 }
+
+variable "lambda_timeout_seconds" {
+  description = "Amount of time your Lambda Function has to run in seconds"
+  type        = number
+  default     = 120
+}
