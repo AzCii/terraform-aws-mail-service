@@ -8,19 +8,19 @@ from botocore.exceptions import ClientError
 mail_recipient = os.environ['MailRecipient']  # An email that is verified by SES to forward the email to.
 mail_sender = os.environ['MailSender']  # An email that is verified by SES to use as From address.
 incoming_email_bucket = os.environ['MailS3Bucket']  # S3 bucket where SES stores incoming emails.
-incoming_email_prefix = os.environ['MailS3Prefix'] # Folder of the incomming emails
+incoming_email_prefix = os.environ['MailS3Prefix'] # Folder of the incoming emails
 archive_email_prefix = os.environ['MailS3Archive'] # Successfully sent emails will be moved to this folder
 error_email_prefix = os.environ['MailS3Error'] # Failed emails will be moved to this folder
 
 
-# Archieve the message after email have been sent
+# Archive the message after email have been sent
 def move_email(s3, message_id, destination_folder):
     copy_source = {
         'Bucket': incoming_email_bucket,
         'Key': incoming_email_prefix + "/" + message_id
     }
     try:
-        s3.copy_object(Bucket=incoming_email_bucket, Key=destination_folder + "/" + message_id, CopySource=copy_source)
+        s3.copy_object(Bucket=incoming_email_bucket, Key=destination_folder + "/" + message_id + ".eml", CopySource=copy_source)
         s3.delete_object(Bucket=incoming_email_bucket, Key=incoming_email_prefix + "/" + message_id)
     except ClientError as e: 
         output = e.response['Error']['Message']
@@ -78,7 +78,7 @@ def lambda_handler(event, context):
     success, result = send_email(message, original_from)
     print(result)
     if success:
-        # Archieve the message
+        # Archive the message
         result = move_email(s3, message_id, archive_email_prefix)
         print(result)
     else:
