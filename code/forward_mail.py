@@ -82,6 +82,16 @@ def lambda_handler(event, context):
         result = move_email(s3, message_id, archive_email_prefix)
         print(result)
     else:
+        # Capture error message in email body
+        fail_msg = email.message.EmailMessage()
+        fail_msg.set_content(result)
+        fail_msg['Subject'] = 'Failed to forward ' + message_id
         # Email failed to send, move it to the error folder
         result = move_email(s3, message_id, error_email_prefix)
+        print(result)
+        # Send mail about failed forwarding
+        fail_msg['From'] = f"Mail Service <{mail_sender}>"
+        fail_msg['To'] = mail_recipient
+        message = fail_msg.as_string() 
+        result = send_email(message, mail_sender)
         print(result)
