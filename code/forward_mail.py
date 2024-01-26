@@ -73,7 +73,11 @@ def lambda_handler(event, context):
     msg['Return-Path'] = mail_sender
 
     # Send the email and handle the result
-    print(f"Forwarding mail with message ID {message_id} from {original_from}")
+    print(f"Forwarding mail with message ID {message_id}")
+    print(f"Original From: {original_from}")
+    print(f"From: {msg['From']}")
+    print(f"Reply-To: {msg['Reply-To']}")
+    print(f"Return-Path: {msg['Return-Path']}")
     message = msg.as_string()   
     success, result = send_email(message, original_from)
     print(result)
