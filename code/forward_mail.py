@@ -25,7 +25,7 @@ def move_email(s3, message_id, destination_folder):
     except ClientError as e: 
         output = e.response['Error']['Message']
     else:
-        output = "Message ID " +  message_id + " have been moved to " + destination_folder
+        output = "Message ID " + message_id + " have been moved to " + destination_folder
     return output
 
 # Send the email
@@ -41,7 +41,7 @@ def send_email(message, original_from):
         output = e.response['Error']['Message']
         return False, output 
     else:
-        output = "Email from " +  original_from + " was forwarded to " + mail_recipient + " by " + mail_sender
+        output = "Email from " + original_from + " was forwarded to " + mail_recipient + " by " + mail_sender
         return True, output
 
 # Lambda handler
@@ -67,10 +67,14 @@ def lambda_handler(event, context):
     original_from = msg['From']
     del msg['From']
     msg['From'] = re.sub(r'\<.+?\>', '', original_from) + ' <{}>'.format(mail_sender)
+
+    # Set the Reply-To to ensure that reply emails goes back to the original sender
     del msg['Reply-To']
-    del msg['Return-Path']
     msg['Reply-To'] = original_from
-    msg['Return-Path'] = mail_sender
+
+    # Set the Return-Path to ensure that bounce emails are also forwarded to the authenticated receiver address
+    del msg['Return-Path']
+    msg['Return-Path'] = mail_recipient
 
     # Send the email and handle the result
     print(f"Forwarding mail with message ID {message_id}")
