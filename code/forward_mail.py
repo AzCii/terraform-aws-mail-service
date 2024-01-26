@@ -66,7 +66,7 @@ def lambda_handler(event, context):
     # Replace the original From address with the authenticated forwarding address
     original_from = msg['From']
     del msg['From']
-    msg['From'] = re.sub(r'\<.+?\>', '', original_from).strip() + ' <{}>'.format(mail_sender)
+    msg['From'] = re.sub(r'\<.+?\>', '', original_from) + ' <{}>'.format(mail_sender)
     del msg['Reply-To']
     del msg['Return-Path']
     msg['Reply-To'] = original_from
