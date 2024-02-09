@@ -12,6 +12,6 @@ data "archive_file" "python_lambda_package" {
 data "aws_iam_policy_document" "policy_document" {
   statement {
     actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-    resources = concat([aws_ses_email_identity.forwarder.arn], var.mail_alias_addresses)
+    resources = concat([aws_ses_email_identity.forwarder.arn], aws_ses_email_identity.alias[*].arn)
   }
 }
