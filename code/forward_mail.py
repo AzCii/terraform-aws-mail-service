@@ -3,6 +3,7 @@ import os
 import re
 import boto3
 from botocore.exceptions import ClientError
+from email.mime.application import MIMEApplication
 
 # Read the environment variables
 mail_recipient = os.environ['MailRecipient']  # An email that is verified by SES to forward the email to.
@@ -28,6 +29,7 @@ def move_email(s3, message_id, destination_folder):
         output = "Message ID " + message_id + " have been moved to " + destination_folder
     return output
 
+
 # Send the email
 def send_email(message, original_from):
 
@@ -43,6 +45,18 @@ def send_email(message, original_from):
     else:
         output = "Email from " + original_from + " was forwarded to " + mail_recipient + " by " + mail_sender
         return True, output
+
+
+# Check that attachment size is within SES limits
+def check_attachment_size(attachment_content):
+    # Define your size limit (in bytes)
+    size_limit = 10 * 1024 * 1024  # 10 MB as an example, adjust as needed
+
+    if len(attachment_content) > size_limit:
+        return False
+    else:
+        return True
+
 
 # Lambda handler
 def lambda_handler(event, context):
@@ -97,6 +111,18 @@ def lambda_handler(event, context):
         # Email failed to send, move it to the error folder
         result = move_email(s3, message_id, error_email_prefix)
         print(result)
+
+        # Create a new MIME object to attach the orginal email
+        att = MIMEApplication(raw_mail, message_id + ".eml")
+        att.add_header("Content-Disposition", 'attachment', filename=message_id + ".eml")
+
+        # Check if attachment size exceeds the limit
+        if check_attachment_size(raw_mail):
+            # Attach the file object to the message.
+            fail_msg.attach(att)
+        else:
+            print("Attachment exceeds size limit. Not attaching to failure notification email.")
+
         # Send mail about failed forwarding
         fail_msg['From'] = f"Mail Service <{mail_sender}>"
         fail_msg['To'] = mail_recipient
