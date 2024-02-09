@@ -18,6 +18,12 @@ variable "mail_sender_prefix" {
   description = "The prefix of the email address that the forwarded message will be sent from"
 }
 
+variable "mail_alias_addresses" {
+  description = "List of additional email addresses to validate for mail sending"
+  type        = list(any)
+  default     = []
+}
+
 variable "mx_records" {
   description = "List of MX records to set for the domain"
   type        = list(any)

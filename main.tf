@@ -39,6 +39,12 @@ resource "aws_ses_email_identity" "receiver" {
   email = var.mail_recipient
 }
 
+# Verify optional alias email addresses
+resource "aws_ses_email_identity" "alias" {
+  count = length(var.mail_alias_addresses)
+  email = var.mail_alias_addresses[count.index]
+}
+
 # Configure domain mail from
 resource "aws_ses_domain_mail_from" "forwarder" {
   domain           = aws_ses_email_identity.forwarder.email
@@ -201,14 +207,6 @@ resource "aws_iam_user" "user" {
 resource "aws_iam_access_key" "access_key" {
   count = var.smtp_configuration ? 1 : 0
   user  = aws_iam_user.user[0].name
-}
-
-# Attaches a Managed IAM Policy to SES Email Identity resource
-data "aws_iam_policy_document" "policy_document" {
-  statement {
-    actions   = ["ses:SendEmail", "ses:SendRawEmail"]
-    resources = [aws_ses_email_identity.forwarder.arn]
-  }
 }
 
 # Provides an IAM policy attached to a user.

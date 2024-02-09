@@ -44,6 +44,7 @@ The following arguments are supported:
 - aws_region - (Required) The AWS region to create the records in.
 - mail_recipient - (Required) The email address to forward mail to.
 - mail_sender_prefix - (Required) The user part of the email address to use for the sender email.
+- mail_alias_addresses - (Optional) List of additional email addresses to validate for mail sending, for each address added, AWS will mail you a varification link you need to clink.
 - mx_records - (Optional) The MX records to create.
 - mail_from_mx_records - (Optional) The MX records to create.
 - spf_records - (Optional) The SPF records to create.
@@ -61,6 +62,7 @@ The following attributes are exported:
 - smtp_endpoint - The endpoint for the SMTP service.
 - smtp_username - The username for the SMTP service.
 - smtp_password - The password for the SMTP service, can be outputted in user readable format using `nonsensitive(module.mail-service.smtp_password)`.
+- smtp_user_arn - ARM of the IAM user created for SMTP permissions, returns null if smtp_configuration is set to false.
 
 ## Known Issues
 
