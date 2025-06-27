@@ -67,5 +67,3 @@ The following attributes are exported:
 ## Known Issues
 
 - Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
-- A few large emails with many pictures have been seen to get stuck in the incoming folder.
-- A few emails have ended up in the failed folder, with the error message `Email address is not verified. The following identities failed the check in region EU-WEST-1: email@example.com`.

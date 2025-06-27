@@ -3,6 +3,19 @@ resource "aws_s3_bucket" "mail" {
   bucket = "${var.domain}-mail-service"
 }
 
+# Cleanup old files from S3 bucket
+resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
+  bucket = aws_s3_bucket.mail.id
+  rule {
+    id     = "delete-old-files"
+    status = "Enabled"
+
+    expiration {
+      days = 365
+    }
+  }
+}
+
 # Setup bucket policy to allow SES to write to bucket
 resource "aws_s3_bucket_policy" "allow_ses" {
   bucket = aws_s3_bucket.mail.id
@@ -83,6 +96,7 @@ resource "aws_lambda_function" "forward_mail" {
   source_code_hash = data.archive_file.python_lambda_package.output_base64sha256
   timeout          = var.lambda_timeout_seconds
   runtime          = "python3.11"
+  memory_size      = "1024"
 
   environment {
     variables = {

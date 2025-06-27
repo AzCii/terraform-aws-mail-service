@@ -47,15 +47,103 @@ def send_email(message, original_from):
         return True, output
 
 
-# Check that attachment size is within SES limits
-def check_attachment_size(attachment_content):
-    # Define your size limit (in bytes)
-    size_limit = 10 * 1024 * 1024  # 10 MB as an example, adjust as needed
+# Save attachments to S3
+def save_attachments_to_s3(msg, message_id, s3):
+    attachment_prefix = f"attachments/{message_id}"
+    s3_links = []
 
-    if len(attachment_content) > size_limit:
-        return False
+    for part in msg.walk():
+        content_disposition = part.get("Content-Disposition", "")
+        if part.get_content_maintype() == 'multipart':
+            continue
+        if "attachment" in content_disposition:
+            filename = part.get_filename()
+            if not filename:
+                continue
+            file_data = part.get_payload(decode=True)
+            s3_key = f"{attachment_prefix}/{filename}"
+
+            try:
+                # Upload file
+                s3.put_object(Bucket=incoming_email_bucket, Key=s3_key, Body=file_data)
+
+                # Generate pre-signed URL
+                url = s3.generate_presigned_url(
+                    ClientMethod='get_object',
+                    Params={'Bucket': incoming_email_bucket, 'Key': s3_key},
+                    ExpiresIn=7 * 24 * 60 * 60
+                )
+                s3_links.append((filename, url))
+                print(f"Saved {filename} to S3 with URL.")
+            except ClientError as e:
+                print(f"Error saving attachment {filename}: {e.response['Error']['Message']}")
+    return s3_links
+
+
+# Strip attachments from the email and add links to download them
+def strip_attachments_and_add_links(msg, attachment_links):
+    from email.message import EmailMessage
+
+    # Attempt to extract the original HTML or plain body
+    html_body = ""
+    plain_body = ""
+
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            content_disposition = part.get("Content-Disposition", "")
+            charset = part.get_content_charset() or "utf-8"
+
+            if "attachment" not in content_disposition:
+                if content_type == "text/html":
+                    html_body = part.get_payload(decode=True).decode(charset)
+                elif content_type == "text/plain" and not plain_body:
+                    plain_body = part.get_payload(decode=True).decode(charset)
     else:
-        return True
+        charset = msg.get_content_charset() or "utf-8"
+        content_type = msg.get_content_type()
+        if content_type == "text/html":
+            html_body = msg.get_payload(decode=True).decode(charset)
+        elif content_type == "text/plain":
+            plain_body = msg.get_payload(decode=True).decode(charset)
+
+    # Use plain body as fallback if no HTML found
+    if not html_body:
+        html_body = "<pre>{}</pre>".format(plain_body.replace("<", "&lt;").replace(">", "&gt;"))
+
+    # Append links to HTML body
+    if attachment_links:
+        links_html = "<br><p><strong>Attachments ready for download from S3:</strong></p><ul>"
+        for filename, url in attachment_links:
+            links_html += f'<li><a href="{url}">{filename}</a></li>'
+        links_html += "</ul>"
+
+        # Try to insert before </body>, else append to end
+        if "</body>" in html_body.lower():
+            body_tag = re.search(r"</body>", html_body, re.IGNORECASE)
+            insert_pos = body_tag.start()
+            html_body = html_body[:insert_pos] + links_html + html_body[insert_pos:]
+        else:
+            html_body += links_html
+
+    # Build the new HTML-only message
+    new_msg = EmailMessage()
+    new_msg.add_alternative(html_body, subtype='html')
+
+    # Copy original headers, excluding auto-managed ones
+    excluded_headers = {
+        'content-type',
+        'content-transfer-encoding',
+        'mime-version',
+        'content-disposition'
+    }
+
+    for header_key, header_value in msg.items():
+        if header_key.lower() not in excluded_headers:
+            clean_value = header_value.replace('\n', ' ').replace('\r', ' ').strip()
+            new_msg[header_key] = clean_value
+
+    return new_msg
 
 
 # Lambda handler
@@ -73,6 +161,13 @@ def lambda_handler(event, context):
     o = s3.get_object(Bucket=incoming_email_bucket, Key=object_path)
     raw_mail = o['Body'].read()
     msg = email.message_from_bytes(raw_mail)
+
+    # Save attachments and get their URLs
+    attachment_links = save_attachments_to_s3(msg, message_id, s3)
+    print(f"Saved attachments: {attachment_links}")
+
+    # Remove attachments and inject download links
+    msg = strip_attachments_and_add_links(msg, attachment_links)
 
     # Remove the DKIM-Signature header, as it can cause issues with forwarding
     del msg['DKIM-Signature']
@@ -115,13 +210,6 @@ def lambda_handler(event, context):
         # Create a new MIME object to attach the orginal email
         att = MIMEApplication(raw_mail, message_id + ".eml")
         att.add_header("Content-Disposition", 'attachment', filename=message_id + ".eml")
-
-        # Check if attachment size exceeds the limit
-        if check_attachment_size(raw_mail):
-            # Attach the file object to the message.
-            fail_msg.attach(att)
-        else:
-            print("Attachment exceeds size limit. Not attaching to failure notification email.")
 
         # Send mail about failed forwarding
         fail_msg['From'] = f"Mail Service <{mail_sender}>"
