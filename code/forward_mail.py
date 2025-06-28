@@ -83,42 +83,54 @@ def save_attachments_to_s3(msg, message_id, s3):
 # Strip attachments from the email and add links to download them
 def strip_attachments_and_add_links(msg, attachment_links):
     from email.message import EmailMessage
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
 
-    # Attempt to extract the original HTML or plain body
+    # Create a new multipart/related message (HTML + inline images)
+    new_msg = MIMEMultipart("related")
+    alternative = MIMEMultipart("alternative")
+    new_msg.attach(alternative)
+
     html_body = ""
     plain_body = ""
 
-    if msg.is_multipart():
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            content_disposition = part.get("Content-Disposition", "")
-            charset = part.get_content_charset() or "utf-8"
+    inline_parts = []
 
-            if "attachment" not in content_disposition:
-                if content_type == "text/html":
-                    html_body = part.get_payload(decode=True).decode(charset)
-                elif content_type == "text/plain" and not plain_body:
-                    plain_body = part.get_payload(decode=True).decode(charset)
-    else:
-        charset = msg.get_content_charset() or "utf-8"
-        content_type = msg.get_content_type()
-        if content_type == "text/html":
-            html_body = msg.get_payload(decode=True).decode(charset)
-        elif content_type == "text/plain":
-            plain_body = msg.get_payload(decode=True).decode(charset)
+    for part in msg.walk():
+        content_type = part.get_content_type()
+        content_disposition = part.get("Content-Disposition", "")
+        content_id = part.get("Content-ID", None)
+        charset = part.get_content_charset() or "utf-8"
 
-    # Use plain body as fallback if no HTML found
+        if part.get_content_maintype() == 'multipart':
+            continue
+
+        if "attachment" in content_disposition:
+            # Skip actual attachments
+            continue
+
+        elif content_type == "text/html":
+            html_body = part.get_payload(decode=True).decode(charset)
+
+        elif content_type == "text/plain" and not plain_body:
+            plain_body = part.get_payload(decode=True).decode(charset)
+
+        elif content_id:
+            # Preserving inline images
+            inline_parts.append(part)
+
+    # Fallback: use plain if no HTML
     if not html_body:
         html_body = "<pre>{}</pre>".format(plain_body.replace("<", "&lt;").replace(">", "&gt;"))
 
-    # Append links to HTML body
+    # Add S3 links to attachments
     if attachment_links:
         links_html = "<br><p><strong>Attachments ready for download from S3:</strong></p><ul>"
         for filename, url in attachment_links:
             links_html += f'<li><a href="{url}">{filename}</a></li>'
         links_html += "</ul>"
 
-        # Try to insert before </body>, else append to end
+        # Try to inject before </body>, else append
         if "</body>" in html_body.lower():
             body_tag = re.search(r"</body>", html_body, re.IGNORECASE)
             insert_pos = body_tag.start()
@@ -126,11 +138,15 @@ def strip_attachments_and_add_links(msg, attachment_links):
         else:
             html_body += links_html
 
-    # Build the new HTML-only message
-    new_msg = EmailMessage()
-    new_msg.add_alternative(html_body, subtype='html')
+    # Attach plain and HTML versions
+    alternative.attach(MIMEText(plain_body, 'plain'))
+    alternative.attach(MIMEText(html_body, 'html'))
 
-    # Copy original headers, excluding auto-managed ones
+    # Attach preserved inline images
+    for part in inline_parts:
+        new_msg.attach(part)
+
+    # Copy over headers except those that conflict
     excluded_headers = {
         'content-type',
         'content-transfer-encoding',
@@ -140,8 +156,7 @@ def strip_attachments_and_add_links(msg, attachment_links):
 
     for header_key, header_value in msg.items():
         if header_key.lower() not in excluded_headers:
-            clean_value = header_value.replace('\n', ' ').replace('\r', ' ').strip()
-            new_msg[header_key] = clean_value
+            new_msg[header_key] = header_value.strip().replace('\n', ' ').replace('\r', ' ')
 
     return new_msg
 
