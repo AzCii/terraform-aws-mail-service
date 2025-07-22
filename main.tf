@@ -214,7 +214,7 @@ resource "aws_route53_record" "dkim_record" {
 # Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
 resource "aws_iam_user" "user" {
   count = var.smtp_configuration ? 1 : 0
-  name  = "smtpIAMUser"
+  name  = "${var.domain}_smtp_user"
 }
 
 # Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
@@ -226,7 +226,7 @@ resource "aws_iam_access_key" "access_key" {
 # Provides an IAM policy attached to a user.
 resource "aws_iam_policy" "policy" {
   count  = var.smtp_configuration ? 1 : 0
-  name   = "smtpIAMUserPolicy"
+  name   = "${var.domain}_smtp_userpolicy"
   policy = data.aws_iam_policy_document.policy_document.json
 }
 
