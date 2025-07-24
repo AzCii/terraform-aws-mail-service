@@ -1,6 +1,7 @@
 # Terraform AWS Mail Service
 
 A terraform module to setup a SES, Lambda and S3 based email forwarding service.
+Attachments will be stripped from the emails and store in S3, a download link will be provided in the forwarded emails, this is to get around limitations with SES.
 
 The setup is based on the blog post [Forward Incoming Email to an External Destination](https://aws.amazon.com/blogs/messaging-and-targeting/forward-incoming-email-to-an-external-destination/) by Brent Meyer, and then adapted with inspiration from [aws-lambda-ses-forwarder](https://github.com/arithmetric/aws-lambda-ses-forwarder) by Joe Turgeon and [aws_lambda_ses_forwarder_python3](https://github.com/tedder/aws_lambda_ses_forwarder_python3) by Ted Timmons.
 
@@ -19,7 +20,7 @@ resource "aws_route53_zone" "example" {
 module "mail_service" {
   source = "github.com/AzCii/terraform-aws-mail-service"
   
-  dns_zone_id            = aws_route53_zone.example.zone_id
+  dns_zone_ids            = aws_route53_zone.example.zone_id
   domain                 = "example.com"
   aws_region             = var.aws_region
   mail_recipient         = "example@gmail.com"
@@ -39,7 +40,7 @@ module "mail_service" {
 The following arguments are supported:
 
 - source - (Required) Source of the module.
-- dns_zone_id - (Required) The ID of the DNS zone to create the records in.
+- dns_zone_ids - (Required) List of the ID(s) of the DNS zone to setup the service for.
 - domain - (Required) The domain to create the records for.
 - aws_region - (Required) The AWS region to create the records in.
 - mail_recipient - (Required) The email address to forward mail to.

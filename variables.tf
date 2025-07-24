@@ -2,8 +2,9 @@ variable "domain" {
   description = "The fully qualified domain name"
 }
 
-variable "dns_zone_id" {
-  description = "Id of the Route53 zone of the fully qualified domain name"
+variable "dns_zone_ids" {
+  description = "List of Ids of the Route53 zones of the fully qualified domain names"
+  type        = list(string)
 }
 
 variable "aws_region" {
@@ -20,7 +21,7 @@ variable "mail_sender_prefix" {
 
 variable "mail_alias_addresses" {
   description = "List of additional email addresses to validate for mail sending"
-  type        = list(any)
+  type        = list(string)
   default     = []
 }
 

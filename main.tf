@@ -3,6 +3,7 @@ resource "aws_s3_bucket" "mail" {
   bucket = "${var.domain}-mail-service"
 }
 
+
 # Cleanup old files from S3 bucket
 resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
   bucket = aws_s3_bucket.mail.id
@@ -16,52 +17,65 @@ resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
   }
 }
 
+
 # Setup bucket policy to allow SES to write to bucket
 resource "aws_s3_bucket_policy" "allow_ses" {
   bucket = aws_s3_bucket.mail.id
   policy = templatefile("${path.module}/policies/s3_allow_ses.tftpl", { bucketName = aws_s3_bucket.mail.bucket, awsAccountId = data.aws_caller_identity.current.account_id })
 }
 
+
 # Setup domain identity
 resource "aws_ses_domain_identity" "mail" {
-  domain = var.domain
+  for_each = data.aws_route53_zone.zones
+  domain = each.value.name
 }
+
 
 # Setup DNS verification record for ses domain identity
 resource "aws_route53_record" "dns_verification" {
-  zone_id = var.dns_zone_id
-  name    = "_amazonses.${aws_ses_domain_identity.mail.id}"
+  for_each = aws_ses_domain_identity.mail
+  zone_id = each.key
+  name    = "_amazonses.${each.value.domain}"
   type    = "TXT"
-  ttl     = "600"
-  records = [aws_ses_domain_identity.mail.verification_token]
+  ttl     = 600
+  records = [each.value.verification_token]
 }
+
 
 # Verify domain identity
 resource "aws_ses_domain_identity_verification" "domain_verification" {
-  domain     = aws_ses_domain_identity.mail.id
+  for_each = aws_ses_domain_identity.mail
+  domain     = each.value.domain
   depends_on = [aws_route53_record.dns_verification]
 }
 
+
 # Verify sender email - Verification email can be found in S3 bucket
 resource "aws_ses_email_identity" "forwarder" {
-  email = "${var.mail_sender_prefix}@${var.domain}"
+  for_each = aws_ses_domain_identity.mail
+  email = "${var.mail_sender_prefix}@${each.value.domain}"
 }
+
 
 # Verify reciever email - Verification email will be sent to your inbox
 resource "aws_ses_email_identity" "receiver" {
   email = var.mail_recipient
 }
 
+
 # Verify optional alias email addresses
 resource "aws_ses_email_identity" "alias" {
-  count = length(var.mail_alias_addresses)
-  email = var.mail_alias_addresses[count.index]
+  for_each = toset(var.mail_alias_addresses)
+  email = each.key
 }
+
 
 # Configure domain mail from
 resource "aws_ses_domain_mail_from" "forwarder" {
-  domain           = aws_ses_email_identity.forwarder.email
-  mail_from_domain = "${var.mail_sender_prefix}.${aws_ses_domain_identity.mail.domain}"
+  for_each = aws_ses_domain_identity.mail
+  domain           = each.value.domain
+  mail_from_domain = "${var.mail_sender_prefix}.${each.value.domain}"
 }
 
 resource "aws_iam_role_policy" "allow_ses" {
@@ -111,6 +125,7 @@ resource "aws_lambda_function" "forward_mail" {
   }
 }
 
+
 # Lambda will try to send the email 3 times, if an error occurs in the code after the mail is sent, you will recieve the same email 3 times.
 resource "aws_lambda_function_event_invoke_config" "limit_retry" {
   function_name          = aws_lambda_function.forward_mail.function_name
@@ -139,6 +154,7 @@ resource "aws_ses_receipt_rule" "store_and_send" {
   }
 }
 
+
 # Activate rule set
 resource "aws_ses_active_receipt_rule_set" "active_rule_set" {
   rule_set_name = aws_ses_receipt_rule_set.main.rule_set_name
@@ -152,63 +168,99 @@ resource "aws_lambda_permission" "allow_ses" {
 }
 
 resource "aws_route53_record" "mx_record" {
-  count   = length(var.mx_records) > 0 ? 1 : 0
-  zone_id = var.dns_zone_id
-  name    = var.domain
+  for_each = {
+    for zone_id, zone in data.aws_route53_zone.zones :
+    zone_id => zone if length(var.mx_records) > 0
+  }
+  zone_id = each.key
+  name    = each.value.name
   type    = "MX"
-  ttl     = "600"
+  ttl     = 600
   records = var.mx_records
 }
 
 resource "aws_route53_record" "domain_mail_from_mx_record" {
-  count   = length(var.mail_from_mx_records) > 0 ? 1 : 0
-  zone_id = var.dns_zone_id
-  name    = aws_ses_domain_mail_from.forwarder.mail_from_domain
+  for_each = {
+    for zone_id, zone in data.aws_route53_zone.zones :
+    zone_id => zone if length(var.mail_from_mx_records) > 0
+  }
+  zone_id = each.key
+  name    = "${var.mail_sender_prefix}.${each.value.name}"
   type    = "MX"
-  ttl     = "600"
+  ttl     = 600
   records = var.mail_from_mx_records
 }
 
 resource "aws_route53_record" "spf_record" {
-  count   = length(var.spf_records) > 0 ? 1 : 0
-  zone_id = var.dns_zone_id
-  name    = var.domain
+  for_each = {
+    for zone_id, zone in data.aws_route53_zone.zones :
+    zone_id => zone if length(var.spf_records) > 0
+  }
+  zone_id = each.key
+  name    = each.value.name
   type    = "TXT"
+  ttl     = 600
   records = var.spf_records
-  ttl     = "600"
 }
 
 resource "aws_route53_record" "domain_mail_from_spf_record" {
-  count   = length(var.spf_records) > 0 ? 1 : 0
-  zone_id = var.dns_zone_id
-  name    = aws_ses_domain_mail_from.forwarder.mail_from_domain
+  for_each = {
+    for zone_id, zone in data.aws_route53_zone.zones :
+    zone_id => zone if length(var.spf_records) > 0
+  }
+  zone_id = each.key
+  name    = "${var.mail_sender_prefix}.${each.value.name}"
   type    = "TXT"
-  ttl     = "600"
+  ttl     = 600
   records = var.spf_records
 }
 
 resource "aws_route53_record" "dmarc_record" {
-  count   = length(var.dmarc_records) > 0 ? 1 : 0
-  zone_id = var.dns_zone_id
-  name    = "_dmarc.${var.domain}"
+  for_each = {
+    for zone_id, zone in data.aws_route53_zone.zones :
+    zone_id => zone if length(var.dmarc_records) > 0
+  }
+  zone_id = each.key
+  name    = "_dmarc.${each.value.name}"
   type    = "TXT"
+  ttl     = 600
   records = var.dmarc_records
-  ttl     = "600"
 }
 
+
+# Provides an SES DomainKeys Identified Mail for validation
 resource "aws_ses_domain_dkim" "domain_dkim" {
-  count  = var.dkim_records ? 1 : 0
-  domain = aws_ses_domain_identity.mail.domain
+  for_each = {
+    for zone_id, domain in aws_ses_domain_identity.mail :
+    zone_id => domain if var.dkim_records
+  }
+  domain = each.value.domain
 }
 
-resource "aws_route53_record" "dkim_record" {
-  count   = var.dkim_records ? 3 : 0
-  zone_id = var.dns_zone_id
-  name    = "${aws_ses_domain_dkim.domain_dkim[0].dkim_tokens[count.index]}._domainkey"
-  type    = "CNAME"
-  records = ["${aws_ses_domain_dkim.domain_dkim[0].dkim_tokens[count.index]}.dkim.amazonses.com"]
-  ttl     = "600"
+locals {
+  zone_domains = {
+    for z in values(data.aws_route53_zone.zones) :
+    z.zone_id => z.name
+  }
 }
+resource "aws_route53_record" "dkim_record" {
+  count = var.dkim_records ? 3 * length(keys(aws_ses_domain_dkim.domain_dkim)) : 0
+
+  zone_id = element(keys(local.zone_domains), floor(count.index / 3))
+
+  name = "${element(
+    values(aws_ses_domain_dkim.domain_dkim)[floor(count.index / 3)].dkim_tokens,
+    count.index % 3
+  )}._domainkey"
+
+  type    = "CNAME"
+  ttl     = 600
+  records = ["${element(
+    values(aws_ses_domain_dkim.domain_dkim)[floor(count.index / 3)].dkim_tokens,
+    count.index % 3
+  )}.dkim.amazonses.com"]
+}
+
 
 # SMTP Configuration
 # Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
@@ -217,11 +269,13 @@ resource "aws_iam_user" "user" {
   name  = "${var.domain}_smtp_user"
 }
 
+
 # Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
 resource "aws_iam_access_key" "access_key" {
   count = var.smtp_configuration ? 1 : 0
   user  = aws_iam_user.user[0].name
 }
+
 
 # Provides an IAM policy attached to a user.
 resource "aws_iam_policy" "policy" {
@@ -229,6 +283,7 @@ resource "aws_iam_policy" "policy" {
   name   = "${var.domain}_smtp_userpolicy"
   policy = data.aws_iam_policy_document.policy_document.json
 }
+
 
 # Attaches a Managed IAM Policy to an IAM user
 resource "aws_iam_user_policy_attachment" "user_policy" {
