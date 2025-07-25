@@ -1,5 +1,5 @@
-variable "domain" {
-  description = "The fully qualified domain name"
+variable "name" {
+  description = "A name that ensures that resources that need to be uniquely named, are unique"
 }
 
 variable "dns_zone_ids" {

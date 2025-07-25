@@ -1,6 +1,6 @@
 # Setup bucket for storing incoming e-mails
 resource "aws_s3_bucket" "mail" {
-  bucket = "${var.domain}-mail-service"
+  bucket = "${var.name}-mail-service"
 }
 
 
@@ -79,13 +79,13 @@ resource "aws_ses_domain_mail_from" "forwarder" {
 }
 
 resource "aws_iam_role_policy" "allow_ses" {
-  name   = "${var.domain}-allow-ses"
+  name   = "${var.name}-mail-service-allow-ses"
   role   = aws_iam_role.ses_role.id
   policy = templatefile("${path.module}/policies/iam_allow_ses.tftpl", { bucketName = aws_s3_bucket.mail.bucket, region = var.aws_region, awsAccountId = data.aws_caller_identity.current.account_id })
 }
 
 resource "aws_iam_role" "ses_role" {
-  name = "${var.domain}-ses-role"
+  name = "${var.name}-mail-service-ses-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -104,7 +104,7 @@ resource "aws_iam_role" "ses_role" {
 
 resource "aws_lambda_function" "forward_mail" {
   filename         = data.archive_file.python_lambda_package.output_path
-  function_name    = "${replace(title(var.domain), ".", "", )}MailService"
+  function_name    = "${title(var.name)}MailService"
   role             = aws_iam_role.ses_role.arn
   handler          = "${trimsuffix(basename(data.archive_file.python_lambda_package.source_file), ".py")}.lambda_handler"
   source_code_hash = data.archive_file.python_lambda_package.output_base64sha256
@@ -118,7 +118,7 @@ resource "aws_lambda_function" "forward_mail" {
       MailS3Prefix  = "incoming",
       MailS3Archive = "archived",
       MailS3Error   = "failed",
-      MailSender    = "${var.mail_sender_prefix}@${var.domain}",
+      MailSender = "${var.mail_sender_prefix}@${values(data.aws_route53_zone.zones)[0].name}",
       MailRecipient = var.mail_recipient,
       Region        = var.aws_region
     }
@@ -133,11 +133,11 @@ resource "aws_lambda_function_event_invoke_config" "limit_retry" {
 }
 
 resource "aws_ses_receipt_rule_set" "main" {
-  rule_set_name = "${var.domain}-mail-service"
+  rule_set_name = "${var.name}-mail-service"
 }
 
 resource "aws_ses_receipt_rule" "store_and_send" {
-  name          = "${var.domain}-store_and_send"
+  name          = "${var.name}-store_and_send"
   rule_set_name = aws_ses_receipt_rule_set.main.rule_set_name
   enabled       = true
 
@@ -266,7 +266,7 @@ resource "aws_route53_record" "dkim_record" {
 # Provides an IAM access key. This is a set of credentials that allow API requests to be made as an IAM user.
 resource "aws_iam_user" "user" {
   count = var.smtp_configuration ? 1 : 0
-  name  = "${var.domain}_smtp_user"
+  name  = "${var.name}_smtp_user"
 }
 
 
@@ -280,7 +280,7 @@ resource "aws_iam_access_key" "access_key" {
 # Provides an IAM policy attached to a user.
 resource "aws_iam_policy" "policy" {
   count  = var.smtp_configuration ? 1 : 0
-  name   = "${var.domain}_smtp_userpolicy"
+  name   = "${var.name}_smtp_userpolicy"
   policy = data.aws_iam_policy_document.policy_document.json
 }
 

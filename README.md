@@ -20,8 +20,8 @@ resource "aws_route53_zone" "example" {
 module "mail_service" {
   source = "github.com/AzCii/terraform-aws-mail-service"
   
-  dns_zone_ids            = aws_route53_zone.example.zone_id
-  domain                 = "example.com"
+  dns_zone_ids           = [aws_route53_zone.example.zone_id]
+  name                   = "uniqueness"
   aws_region             = var.aws_region
   mail_recipient         = "example@gmail.com"
   mail_sender_prefix     = "mail"
@@ -40,8 +40,8 @@ module "mail_service" {
 The following arguments are supported:
 
 - source - (Required) Source of the module.
-- dns_zone_ids - (Required) List of the ID(s) of the DNS zone to setup the service for.
-- domain - (Required) The domain to create the records for.
+- dns_zone_ids - (Required) List of the ID(s) of the DNS zone to setup the service for, the first ID will be regarded as the primary.
+- name - (Required) A name that ensures that resources that need to be uniquely named, are unique.
 - aws_region - (Required) The AWS region to create the records in.
 - mail_recipient - (Required) The email address to forward mail to.
 - mail_sender_prefix - (Required) The user part of the email address to use for the sender email.
@@ -65,6 +65,7 @@ The following attributes are exported:
 - smtp_password - The password for the SMTP service, can be outputted in user readable format using `nonsensitive(module.mail-service.smtp_password)`.
 - smtp_user_arn - ARM of the IAM user created for SMTP permissions, returns null if smtp_configuration is set to false.
 
-## Known Issues
+## Known Issues and Quirks
 
 - Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
+- The domain name from the first specified DNS zone, will be used as MailSender in Lambda.
