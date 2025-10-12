@@ -4,6 +4,7 @@ import re
 import boto3
 from botocore.exceptions import ClientError
 from email.mime.application import MIMEApplication
+from email.header import decode_header
 
 # Read the environment variables
 mail_recipient = os.environ['MailRecipient']  # An email that is verified by SES to forward the email to.
@@ -13,6 +14,16 @@ incoming_email_prefix = os.environ['MailS3Prefix'] # Folder of the incoming emai
 archive_email_prefix = os.environ['MailS3Archive'] # Successfully sent emails will be moved to this folder
 error_email_prefix = os.environ['MailS3Error'] # Failed emails will be moved to this folder
 
+# Decode email filename if encoded
+def decode_filename(raw_filename):
+    decoded_parts = decode_header(raw_filename)
+    filename = ""
+    for part, encoding in decoded_parts:
+        if isinstance(part, bytes):
+            filename += part.decode(encoding or 'utf-8', errors='replace')
+        else:
+            filename += part
+    return filename
 
 # Archive the message after email have been sent
 def move_email(s3, message_id, destination_folder):
@@ -57,7 +68,11 @@ def save_attachments_to_s3(msg, message_id, s3):
         if part.get_content_maintype() == 'multipart':
             continue
         if "attachment" in content_disposition:
-            filename = part.get_filename()
+            raw_filename = part.get_filename()
+            if raw_filename:
+                filename = decode_filename(raw_filename)
+            else:
+                continue
             if not filename:
                 continue
             file_data = part.get_payload(decode=True)
@@ -71,7 +86,7 @@ def save_attachments_to_s3(msg, message_id, s3):
                 url = s3.generate_presigned_url(
                     ClientMethod='get_object',
                     Params={'Bucket': incoming_email_bucket, 'Key': s3_key},
-                    ExpiresIn=7 * 24 * 60 * 60
+                    ExpiresIn=14 * 24 * 60 * 60
                 )
                 s3_links.append((filename, url))
                 print(f"Saved {filename} to S3 with URL.")
@@ -187,25 +202,32 @@ def lambda_handler(event, context):
     # Remove the DKIM-Signature header, as it can cause issues with forwarding
     del msg['DKIM-Signature']
 
-    # Replace the original From address with the authenticated forwarding address
+    # Replace the original headers authenticated addresses
+    print("Headers before modification")
+    print(f"From: {msg['From']}")
+    print(f"Sender: {msg['Sender']}")
+    print(f"Reply-To: {msg['Reply-To']}")
+    print(f"Return-Path: {msg['Return-Path']}")
+
     original_from = msg['From']
     del msg['From']
-    msg['From'] = re.sub(r'\<.+?\>', '', original_from) + ' <{}>'.format(mail_sender)
+    del msg['Sender']
+    msg['From'] = f'"{original_from}" <{mail_sender}>'
 
-    # Set the Reply-To to ensure that reply emails goes back to the original sender
     del msg['Reply-To']
     msg['Reply-To'] = original_from
 
-    # Set the Return-Path to ensure that bounce emails are also forwarded to the authenticated receiver address
     del msg['Return-Path']
-    msg['Return-Path'] = mail_recipient
+    msg['Return-Path'] = mail_sender
+
+    print("Headers after modification")
+    print(f"From: {msg['From']}")
+    print(f"Sender: {msg['Sender']}")
+    print(f"Reply-To: {msg['Reply-To']}")
+    print(f"Return-Path: {msg['Return-Path']}")
 
     # Send the email and handle the result
     print(f"Forwarding mail with message ID {message_id}")
-    print(f"Original From: {original_from}")
-    print(f"From: {msg['From']}")
-    print(f"Reply-To: {msg['Reply-To']}")
-    print(f"Return-Path: {msg['Return-Path']}")
     message = msg.as_string()   
     success, result = send_email(message, original_from)
     print(result)
