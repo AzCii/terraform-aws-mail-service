@@ -29,5 +29,5 @@ data "aws_iam_policy_document" "policy_document" {
 # Data of the dns zones
 data "aws_route53_zone" "zones" {
   for_each = toset(var.dns_zone_ids)
-  zone_id = each.value
+  zone_id  = each.value
 }

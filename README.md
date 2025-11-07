@@ -46,6 +46,7 @@ The following arguments are supported:
 - mail_recipient - (Required) The email address to forward mail to.
 - mail_sender_prefix - (Required) The user part of the email address to use for the sender email.
 - mail_alias_addresses - (Optional) List of additional email addresses to validate for mail sending, for each address added, AWS will mail you a varification link you need to clink.
+- bounce_mails_to - (Optional) List of receiving email addresses to block by sending back bounce messages.
 - mx_records - (Optional) The MX records to create.
 - mail_from_mx_records - (Optional) The MX records to create.
 - spf_records - (Optional) The SPF records to create.

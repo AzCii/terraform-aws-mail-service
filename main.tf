@@ -28,24 +28,24 @@ resource "aws_s3_bucket_policy" "allow_ses" {
 # Setup domain identity
 resource "aws_ses_domain_identity" "mail" {
   for_each = data.aws_route53_zone.zones
-  domain = each.value.name
+  domain   = each.value.name
 }
 
 
 # Setup DNS verification record for ses domain identity
 resource "aws_route53_record" "dns_verification" {
   for_each = aws_ses_domain_identity.mail
-  zone_id = each.key
-  name    = "_amazonses.${each.value.domain}"
-  type    = "TXT"
-  ttl     = 600
-  records = [each.value.verification_token]
+  zone_id  = each.key
+  name     = "_amazonses.${each.value.domain}"
+  type     = "TXT"
+  ttl      = 600
+  records  = [each.value.verification_token]
 }
 
 
 # Verify domain identity
 resource "aws_ses_domain_identity_verification" "domain_verification" {
-  for_each = aws_ses_domain_identity.mail
+  for_each   = aws_ses_domain_identity.mail
   domain     = each.value.domain
   depends_on = [aws_route53_record.dns_verification]
 }
@@ -54,9 +54,13 @@ resource "aws_ses_domain_identity_verification" "domain_verification" {
 # Verify sender email - Verification email can be found in S3 bucket
 resource "aws_ses_email_identity" "forwarder" {
   for_each = aws_ses_domain_identity.mail
-  email = "${var.mail_sender_prefix}@${each.value.domain}"
+  email    = "${var.mail_sender_prefix}@${each.value.domain}"
 }
 
+# Verify bounce email - Verification email can be found in S3 bucket
+resource "aws_ses_email_identity" "bounce" {
+  email = "bounce@${values(data.aws_route53_zone.zones)[0].name}"
+}
 
 # Verify reciever email - Verification email will be sent to your inbox
 resource "aws_ses_email_identity" "receiver" {
@@ -67,13 +71,13 @@ resource "aws_ses_email_identity" "receiver" {
 # Verify optional alias email addresses
 resource "aws_ses_email_identity" "alias" {
   for_each = toset(var.mail_alias_addresses)
-  email = each.key
+  email    = each.key
 }
 
 
 # Configure domain mail from
 resource "aws_ses_domain_mail_from" "forwarder" {
-  for_each = aws_ses_domain_identity.mail
+  for_each         = aws_ses_domain_identity.mail
   domain           = each.value.domain
   mail_from_domain = "${var.mail_sender_prefix}.${each.value.domain}"
 }
@@ -118,7 +122,7 @@ resource "aws_lambda_function" "forward_mail" {
       MailS3Prefix  = "incoming",
       MailS3Archive = "archived",
       MailS3Error   = "failed",
-      MailSender = "${var.mail_sender_prefix}@${values(data.aws_route53_zone.zones)[0].name}",
+      MailSender    = "${var.mail_sender_prefix}@${values(data.aws_route53_zone.zones)[0].name}",
       MailRecipient = var.mail_recipient,
       Region        = var.aws_region
     }
@@ -136,10 +140,32 @@ resource "aws_ses_receipt_rule_set" "main" {
   rule_set_name = "${var.name}-mail-service"
 }
 
+resource "aws_ses_receipt_rule" "bounce" {
+  name          = "${var.name}-bounce"
+  rule_set_name = aws_ses_receipt_rule_set.main.rule_set_name
+  enabled       = true
+  recipients    = length(var.bounce_mails_to) > 0 ? var.bounce_mails_to : ["bounce-filter@was-not.configured"] # Filter for the specific email address
+
+  # This action rejects the email
+  bounce_action {
+    position        = 1
+    message         = "The email address you sent to is not valid."
+    sender          = aws_ses_email_identity.bounce.email # The address that is "bouncing" the mail
+    smtp_reply_code = "550"                               # Mailbox unavailable
+    status_code     = "5.1.1"                             # Bad destination mailbox address
+  }
+
+  stop_action {
+    position = 2
+    scope    = "RuleSet"
+  }
+}
+
 resource "aws_ses_receipt_rule" "store_and_send" {
   name          = "${var.name}-store_and_send"
   rule_set_name = aws_ses_receipt_rule_set.main.rule_set_name
   enabled       = true
+  after         = aws_ses_receipt_rule.bounce.name
 
   s3_action {
     bucket_name       = aws_s3_bucket.mail.bucket
@@ -215,6 +241,14 @@ resource "aws_route53_record" "domain_mail_from_spf_record" {
   records = var.spf_records
 }
 
+resource "aws_route53_record" "bounce_spf_record" {
+  zone_id = values(data.aws_route53_zone.zones)[0].zone_id
+  name    = "bounce.${values(data.aws_route53_zone.zones)[0].name}"
+  type    = "TXT"
+  ttl     = 600
+  records = var.spf_records
+}
+
 resource "aws_route53_record" "dmarc_record" {
   for_each = {
     for zone_id, zone in data.aws_route53_zone.zones :
@@ -253,8 +287,8 @@ resource "aws_route53_record" "dkim_record" {
     count.index % 3
   )}._domainkey"
 
-  type    = "CNAME"
-  ttl     = 600
+  type = "CNAME"
+  ttl  = 600
   records = ["${element(
     values(aws_ses_domain_dkim.domain_dkim)[floor(count.index / 3)].dkim_tokens,
     count.index % 3

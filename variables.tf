@@ -25,6 +25,12 @@ variable "mail_alias_addresses" {
   default     = []
 }
 
+variable "bounce_mails_to" {
+  description = "Optional list of receiving email addresses to block by sending back bounce messages"
+  type        = list(string)
+  default     = []
+}
+
 variable "mx_records" {
   description = "List of MX records to set for the domain"
   type        = list(any)
