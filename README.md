@@ -53,6 +53,7 @@ The following arguments are supported:
 - dmarc_records - (Optional) The DMARC records to create.
 - dkim_records - (Optional) If true, create DKIM records, default is set to false.
 - smtp_configuration - (Optional) If true, creates IAM credentials for SMTP, default is set to false.
+- include_metadata - (Optional) If true, embed the metadata footer (From, To, etc.) in the email, default is set to false.
 - lambda_timeout_seconds - (Optional) Amount of time your Lambda Function has to run in seconds. Defaults to `120`. See [Limits](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html).
 
 ## Attributes Reference

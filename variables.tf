@@ -25,6 +25,12 @@ variable "mail_alias_addresses" {
   default     = []
 }
 
+variable "include_metadata" {
+  description = "If true, embed the metadata footer (From, To, etc.) in the email."
+  type        = bool
+  default     = false
+}
+
 variable "bounce_mails_to" {
   description = "Optional list of receiving email addresses to block by sending back bounce messages"
   type        = list(string)

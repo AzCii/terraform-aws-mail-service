@@ -118,13 +118,14 @@ resource "aws_lambda_function" "forward_mail" {
 
   environment {
     variables = {
-      MailS3Bucket  = aws_s3_bucket.mail.bucket,
-      MailS3Prefix  = "incoming",
-      MailS3Archive = "archived",
-      MailS3Error   = "failed",
-      MailSender    = "${var.mail_sender_prefix}@${values(data.aws_route53_zone.zones)[0].name}",
-      MailRecipient = var.mail_recipient,
-      Region        = var.aws_region
+      MailS3Bucket    = aws_s3_bucket.mail.bucket,
+      MailS3Prefix    = "incoming",
+      MailS3Archive   = "archived",
+      MailS3Error     = "failed",
+      MailSender      = "${var.mail_sender_prefix}@${values(data.aws_route53_zone.zones)[0].name}",
+      MailRecipient   = var.mail_recipient,
+      IncludeMetadata = var.include_metadata,
+      Region          = var.aws_region
     }
   }
 }

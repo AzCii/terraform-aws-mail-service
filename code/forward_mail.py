@@ -5,6 +5,10 @@ import boto3
 from botocore.exceptions import ClientError
 from email.mime.application import MIMEApplication
 from email.header import decode_header
+from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import parseaddr
 
 # Read the environment variables
 mail_recipient = os.environ['MailRecipient']  # An email that is verified by SES to forward the email to.
@@ -13,6 +17,7 @@ incoming_email_bucket = os.environ['MailS3Bucket']  # S3 bucket where SES stores
 incoming_email_prefix = os.environ['MailS3Prefix'] # Folder of the incoming emails
 archive_email_prefix = os.environ['MailS3Archive'] # Successfully sent emails will be moved to this folder
 error_email_prefix = os.environ['MailS3Error'] # Failed emails will be moved to this folder
+include_metadata = os.environ.get('IncludeMetadata', 'false').lower() == 'true'  # Whether to include metadata in the email body
 
 # Decode email filename if encoded
 def decode_filename(raw_filename):
@@ -95,11 +100,8 @@ def save_attachments_to_s3(msg, message_id, s3):
     return s3_links
 
 
-# Strip attachments from the email and add links to download them
-def strip_attachments_and_add_links(msg, attachment_links):
-    from email.message import EmailMessage
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
+# Strip attachments from the email and add links to download them and add metadata to the end of the email body
+def handle_attachments_and_metadata(msg, attachment_links, message_id):
 
     # Create a new multipart/related message (HTML + inline images)
     new_msg = MIMEMultipart("related")
@@ -140,10 +142,19 @@ def strip_attachments_and_add_links(msg, attachment_links):
 
     # Add S3 links to attachments
     if attachment_links:
-        links_html = "<br><p><strong>Attachments ready for download from S3:</strong></p><ul>"
+        links_parts = []
+        links_parts.append('<hr style="border:0;border-top:1px solid #cccccc;margin-top:20px;margin-bottom:20px;">')
+        links_parts.append('<h3 style="font-family:Arial,sans-serif;font-size:16px;margin:0 0 10px 0;">📎 Downloads</h3>')
+        links_parts.append('<ul style="list-style-type:none;padding:0;margin:0;margin-top:5px;">')
         for filename, url in attachment_links:
-            links_html += f'<li><a href="{url}">{filename}</a></li>'
-        links_html += "</ul>"
+            links_parts.append(
+                f'<li style="margin-bottom:8px;font-family:Arial,sans-serif;font-size:14px;padding-left:15px;">'
+                f'<a href="{url}" style="color:#000000;text-decoration:none;">{filename}</a>'
+                f'</li>'
+            )
+            
+        links_parts.append("</ul>")
+        links_html = "\n".join(links_parts)
 
         # Try to inject before </body>, else append
         if "</body>" in html_body.lower():
@@ -152,6 +163,34 @@ def strip_attachments_and_add_links(msg, attachment_links):
             html_body = html_body[:insert_pos] + links_html + html_body[insert_pos:]
         else:
             html_body += links_html
+
+    if include_metadata:
+        # Add metadata about the email at the end of the email body
+        info_parts = []
+        from_email_only = parseaddr(msg['From'])[1]
+        to_email_only = parseaddr(msg['To'])[1]
+        from_addr = from_email_only.replace('.', '<span>.</span>')
+        to_addr = to_email_only.replace('.', '<span>.</span>')
+        date_str = msg['Date']
+
+        info_parts.append('<hr style="border:0;border-top:1px solid #cccccc;margin-top:20px;margin-bottom:20px;">')
+        info_parts.append('<h3 style="font-family:Arial,sans-serif;font-size:16px;margin:0 0 10px 0;">🗒️ Metadata</h3>')
+        info_parts.append('<ul style="list-style-type:none;padding:0;margin:0;margin-top:5px;">')
+        info_parts.append(f'<li style="margin-bottom:8px;font-family:Arial,sans-serif;font-size:14px;padding-left:15px;"><strong>From:</strong> {from_addr}</li>')
+        info_parts.append(f'<li style="margin-bottom:8px;font-family:Arial,sans-serif;font-size:14px;padding-left:15px;"><strong>To:</strong> {to_addr}</li>')
+        info_parts.append(f'<li style="margin-bottom:8px;font-family:Arial,sans-serif;font-size:14px;padding-left:15px;"><strong>Date:</strong> {date_str}</li>')
+        info_parts.append(f'<li style="margin-bottom:8px;font-family:Arial,sans-serif;font-size:14px;padding-left:15px;"><strong>Message Id:</strong> {message_id}</li>')
+        info_parts.append('</ul>')
+
+        info_html = "\n".join(info_parts)
+
+        # Inject the info footer (using your same trusted logic)
+        if "</body>" in html_body.lower():
+            body_tag = re.search(r"</body>", html_body, re.IGNORECASE)
+            insert_pos = body_tag.start()
+            html_body = html_body[:insert_pos] + info_html + html_body[insert_pos:]
+        else:
+            html_body += info_html
 
     # Attach plain and HTML versions
     alternative.attach(MIMEText(plain_body, 'plain'))
@@ -197,7 +236,7 @@ def lambda_handler(event, context):
     print(f"Saved attachments: {attachment_links}")
 
     # Remove attachments and inject download links
-    msg = strip_attachments_and_add_links(msg, attachment_links)
+    msg = handle_attachments_and_metadata(msg, attachment_links, message_id)
 
     # Remove the DKIM-Signature header, as it can cause issues with forwarding
     del msg['DKIM-Signature']
@@ -205,6 +244,7 @@ def lambda_handler(event, context):
     # Replace the original headers authenticated addresses
     print("Headers before modification")
     print(f"From: {msg['From']}")
+    print(f"To: {msg['To']}")
     print(f"Sender: {msg['Sender']}")
     print(f"Reply-To: {msg['Reply-To']}")
     print(f"Return-Path: {msg['Return-Path']}")
