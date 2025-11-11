@@ -72,5 +72,7 @@ The following attributes are exported:
 - Emails forwarded will be sent with the FROM address of `mail_sender_prefix`@`domain` (mail@example.com in this example) instead of the real sender email address. Replies will still go to the correct original sender email address, as the original email address are set in REPLY-TO.
 - The domain name from the first specified DNS zone, will be used as MailSender in Lambda.
 - Email forwarding fails if the TO field is empty, for example, when there are only BCC recipients.
+- If you use the `bounce_mails_to` feature, the bounce notification sent back, will currently end up in the spam folder as it's not trusted.
 - Forwarding failes if the FROM address are invalid, ex. containing white space. In a future version, emails from invalid adresses should be filtered out.
+
 
